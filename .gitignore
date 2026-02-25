@@ -1,0 +1,12 @@
+# secrets
+.env.live
+certbot/
+certs/
+
+# node
+node_modules
+dist
+build
+
+# logs
+*.log

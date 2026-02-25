@@ -1,0 +1,83 @@
+version: '3.9'
+services:
+
+  backend:
+    build: ./backend
+    container_name: ceyizator-backend
+    env_file:
+      - ./backend/.env.live
+    command: gunicorn --workers 1 --threads 10 --timeout 120 --bind 0.0.0.0:5000 main:app
+    volumes:
+      - ./backend/.env.live:/app/.env.live
+      - /opt/ceyizator/certs:/certs:ro
+      - ./backend/logs:/app/logs
+      - ./backend/flask_session:/app/flask_session
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s 
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+    expose:
+      - "5000"
+      
+  frontend:
+    build: ./frontend
+    container_name: ceyizator-frontend
+    restart: unless-stopped
+    expose:
+      - '80'
+  mongo:
+    image: 'mongo:7'
+    container_name: ceyizator-mongo
+    restart: always
+    ports:
+      - '127.0.0.1:27017:27017'
+    command:
+      - mongod
+      - '--tlsMode'
+      - requireTLS
+      - '--tlsCertificateKeyFile'
+      - /certs/server.pem
+      - '--tlsCAFile'
+      - /certs/ca.pem
+      - '--bind_ip_all'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: super_secure_password_buraya
+    volumes:
+      - '/opt/ceyizator/backend/certs:/certs:ro'
+      - 'mongo_data:/data/db'
+  redis:
+    image: 'redis:7-alpine'
+    container_name: ceyizator-redis
+    volumes:
+      - 'redis_data:/data'
+    restart: unless-stopped
+  nginx:
+    image: 'nginx:alpine'
+    container_name: ceyizator-nginx
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - './nginx/conf.d:/etc/nginx/conf.d:ro'
+      - './certbot/www:/var/www/certbot:ro'
+      - './certbot/conf:/etc/letsencrypt:ro'
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+  certbot:
+    image: certbot/certbot
+    container_name: ceyizator-certbot
+    volumes:
+      - './certbot/www:/var/www/certbot:rw'
+      - './certbot/conf:/etc/letsencrypt:rw'
+volumes:
+  mongo_data: null
+  redis_data: null
